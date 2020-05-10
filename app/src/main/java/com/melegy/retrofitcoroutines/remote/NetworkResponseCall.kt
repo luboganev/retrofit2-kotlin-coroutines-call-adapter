@@ -17,63 +17,18 @@ internal class NetworkResponseCall<S : Any, E : Any>(
     override fun enqueue(callback: Callback<NetworkResponse<S, E>>) {
         return delegate.enqueue(object : Callback<S> {
             override fun onResponse(call: Call<S>, response: Response<S>) {
-                val body = response.body()
-                val code = response.code()
-                val error = response.errorBody()
-
-                if (response.isSuccessful) {
-                    if (body != null) {
-                        callback.onResponse(
-                            this@NetworkResponseCall,
-                            Response.success(NetworkResponse.Success(code, body))
-                        )
-                    } else {
-                        callback.onResponse(
-                            this@NetworkResponseCall,
-                            Response.success(NetworkResponse.SuccessEmpty(code))
-                        )
-                    }
-                } else {
-                    if (errorConverter != null) {
-                        val errorBody: E = try {
-                            requireNotNull(error) {
-                                "Unexpected null error body"
-                            }
-                            require(error.contentLength() != 0L) {
-                                "Unexpected empty error body"
-                            }
-                            val parsedErrorBody = errorConverter.convert(error)
-                            requireNotNull(parsedErrorBody) {
-                                "Unexpected null parsed error"
-                            }
-                            parsedErrorBody
-                        } catch (ex: Exception) {
-                            callback.onResponse(
-                                this@NetworkResponseCall,
-                                Response.success(NetworkResponse.UnknownFailure(ex))
-                            )
-                            return
-                        }
-
-                        callback.onResponse(
-                            this@NetworkResponseCall,
-                            Response.success(NetworkResponse.Error(code, errorBody))
-                        )
-                    } else {
-                        callback.onResponse(
-                            this@NetworkResponseCall,
-                            Response.success(NetworkResponse.ErrorEmpty(code))
-                        )
-                    }
-                }
+                callback.onResponse(
+                    this@NetworkResponseCall,
+                    Response.success(convertSuccessToNetworkResponse(response))
+                )
             }
 
             override fun onFailure(call: Call<S>, throwable: Throwable) {
-                val networkResponse = when (throwable) {
-                    is IOException -> NetworkResponse.NetworkFailure(throwable)
-                    else -> NetworkResponse.UnknownFailure(throwable)
-                }
-                callback.onResponse(this@NetworkResponseCall, Response.success(networkResponse))
+                callback.onResponse(
+                    this@NetworkResponseCall, Response.success(
+                        convertFailureToNetworkResponse(throwable)
+                    )
+                )
             }
         })
     }
@@ -87,10 +42,58 @@ internal class NetworkResponseCall<S : Any, E : Any>(
     override fun cancel() = delegate.cancel()
 
     override fun execute(): Response<NetworkResponse<S, E>> {
-        throw UnsupportedOperationException("NetworkResponseCall doesn't support execute")
+        val response: Response<S>
+        try {
+            response = delegate.execute()
+        } catch (ex: Exception) {
+            return Response.success(convertFailureToNetworkResponse(ex))
+        }
+        return Response.success(convertSuccessToNetworkResponse(response))
     }
 
     override fun request(): Request = delegate.request()
 
     override fun timeout(): Timeout = delegate.timeout()
+
+    private fun convertSuccessToNetworkResponse(response: Response<S>): NetworkResponse<S, E> {
+        val body = response.body()
+        val code = response.code()
+        val error = response.errorBody()
+
+        if (response.isSuccessful) {
+            return if (body != null) {
+                NetworkResponse.Success(code, body)
+            } else {
+                NetworkResponse.SuccessEmpty(code)
+            }
+        } else {
+            if (errorConverter != null) {
+                val errorBody: E = try {
+                    requireNotNull(error) {
+                        "Unexpected null error body"
+                    }
+                    require(error.contentLength() != 0L) {
+                        "Unexpected empty error body"
+                    }
+                    val parsedErrorBody = errorConverter.convert(error)
+                    requireNotNull(parsedErrorBody) {
+                        "Unexpected null parsed error"
+                    }
+                    parsedErrorBody
+                } catch (ex: Exception) {
+                    return NetworkResponse.UnknownFailure(ex)
+                }
+
+                return NetworkResponse.Error(code, errorBody)
+            } else {
+                return NetworkResponse.ErrorEmpty(code)
+            }
+        }
+    }
+
+    private fun convertFailureToNetworkResponse(throwable: Throwable): NetworkResponse<S, E> =
+        when (throwable) {
+            is IOException -> NetworkResponse.NetworkFailure(throwable)
+            else -> NetworkResponse.UnknownFailure(throwable)
+        }
 }
