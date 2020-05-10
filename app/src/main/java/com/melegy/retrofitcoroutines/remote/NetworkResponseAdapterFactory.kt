@@ -37,9 +37,16 @@ class NetworkResponseAdapterFactory : CallAdapter.Factory() {
         val successBodyType = getParameterUpperBound(0, responseType)
         val errorBodyType = getParameterUpperBound(1, responseType)
 
-        val errorBodyConverter =
+        // For empty error body types, Void will be used
+        val errorBodyConverter = if (errorBodyType != Void::class.java) {
             retrofit.nextResponseBodyConverter<Any>(null, errorBodyType, annotations)
+        } else {
+            null
+        }
 
-        return NetworkResponseAdapter<Any, Any>(successBodyType, errorBodyConverter)
+        return NetworkResponseAdapter<Any, Any>(
+            successBodyType,
+            errorBodyConverter
+        )
     }
 }

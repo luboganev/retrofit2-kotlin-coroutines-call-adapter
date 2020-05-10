@@ -11,7 +11,7 @@ import java.io.IOException
 
 internal class NetworkResponseCall<S : Any, E : Any>(
     private val delegate: Call<S>,
-    private val errorConverter: Converter<ResponseBody, E>
+    private val errorConverter: Converter<ResponseBody, E>?
 ) : Call<NetworkResponse<S, E>> {
 
     override fun enqueue(callback: Callback<NetworkResponse<S, E>>) {
@@ -25,34 +25,44 @@ internal class NetworkResponseCall<S : Any, E : Any>(
                     if (body != null) {
                         callback.onResponse(
                             this@NetworkResponseCall,
-                            Response.success(NetworkResponse.Success(body))
+                            Response.success(NetworkResponse.Success(code, body))
                         )
                     } else {
-                        // Response is successful but the body is null
                         callback.onResponse(
                             this@NetworkResponseCall,
-                            Response.success(NetworkResponse.UnknownError(null))
+                            Response.success(NetworkResponse.SuccessEmpty(code))
                         )
                     }
                 } else {
-                    val errorBody = when {
-                        error == null -> null
-                        error.contentLength() == 0L -> null
-                        else -> try {
-                            errorConverter.convert(error)
+                    if (errorConverter != null) {
+                        val errorBody: E = try {
+                            requireNotNull(error) {
+                                "Unexpected null error body"
+                            }
+                            require(error.contentLength() != 0L) {
+                                "Unexpected empty error body"
+                            }
+                            val parsedErrorBody = errorConverter.convert(error)
+                            requireNotNull(parsedErrorBody) {
+                                "Unexpected null parsed error"
+                            }
+                            parsedErrorBody
                         } catch (ex: Exception) {
-                            null
+                            callback.onResponse(
+                                this@NetworkResponseCall,
+                                Response.success(NetworkResponse.UnknownFailure(ex))
+                            )
+                            return
                         }
-                    }
-                    if (errorBody != null) {
+
                         callback.onResponse(
                             this@NetworkResponseCall,
-                            Response.success(NetworkResponse.ApiError(errorBody, code))
+                            Response.success(NetworkResponse.Error(code, errorBody))
                         )
                     } else {
                         callback.onResponse(
                             this@NetworkResponseCall,
-                            Response.success(NetworkResponse.UnknownError(null))
+                            Response.success(NetworkResponse.ErrorEmpty(code))
                         )
                     }
                 }
@@ -60,8 +70,8 @@ internal class NetworkResponseCall<S : Any, E : Any>(
 
             override fun onFailure(call: Call<S>, throwable: Throwable) {
                 val networkResponse = when (throwable) {
-                    is IOException -> NetworkResponse.NetworkError(throwable)
-                    else -> NetworkResponse.UnknownError(throwable)
+                    is IOException -> NetworkResponse.NetworkFailure(throwable)
+                    else -> NetworkResponse.UnknownFailure(throwable)
                 }
                 callback.onResponse(this@NetworkResponseCall, Response.success(networkResponse))
             }

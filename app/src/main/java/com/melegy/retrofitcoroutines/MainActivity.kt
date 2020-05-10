@@ -26,20 +26,40 @@ class MainActivity : AppCompatActivity() {
         val service = retrofit.create<ApiService>()
 
         GlobalScope.launch {
-            val response1 = service.getSuccess()
-            when (response1) {
-                is NetworkResponse.Success -> Log.d(TAG, "Success ${response1.body.name}")
-                is NetworkResponse.ApiError -> Log.d(TAG, "ApiError ${response1.body.message}")
-                is NetworkResponse.NetworkError -> Log.d(TAG, "NetworkError")
-                is NetworkResponse.UnknownError -> Log.d(TAG, "UnknownError")
+            when (val response1 = service.getSuccess()) {
+                is NetworkResponse.Success -> Log.d(TAG, "Success[${response1.code}]\n${response1.body}")
+                is NetworkResponse.SuccessEmpty -> Log.d(TAG, "SuccessEmpty[${response1.code}]")
+                is NetworkResponse.Error -> Log.d(TAG, "Error[${response1.code}]\n${response1.body}")
+                is NetworkResponse.ErrorEmpty -> Log.d(TAG, "ErrorEmpty[${response1.code}]")
+                is NetworkResponse.NetworkFailure -> Log.d(TAG, "NetworkError")
+                is NetworkResponse.UnknownFailure -> Log.d(TAG, "UnknownError: ${response1.error}")
             }
 
-            val response2 = service.getError()
-            when (response2) {
-                is NetworkResponse.Success -> Log.d(TAG, "Success ${response2.body.name}")
-                is NetworkResponse.ApiError -> Log.d(TAG, "ApiError ${response2.body.message}")
-                is NetworkResponse.NetworkError -> Log.d(TAG, "NetworkError")
-                is NetworkResponse.UnknownError -> Log.d(TAG, "UnknownError")
+            when (val response2 = service.getError()) {
+                is NetworkResponse.Success -> Log.d(TAG, "Success[${response2.code}]\n${response2.body}")
+                is NetworkResponse.SuccessEmpty -> Log.d(TAG, "SuccessEmpty[${response2.code}]")
+                is NetworkResponse.Error -> Log.d(TAG, "Error[${response2.code}]\n${response2.body}")
+                is NetworkResponse.ErrorEmpty -> Log.d(TAG, "ErrorEmpty[${response2.code}]")
+                is NetworkResponse.NetworkFailure -> Log.d(TAG, "NetworkError")
+                is NetworkResponse.UnknownFailure -> Log.d(TAG, "UnknownError: ${response2.error}")
+            }
+
+            when (val response3 = service.getSuccessEmpty()) {
+                is NetworkResponse.Success -> Log.d(TAG, "Success[${response3.code}]\n${response3.body}")
+                is NetworkResponse.SuccessEmpty -> Log.d(TAG, "SuccessEmpty[${response3.code}]")
+                is NetworkResponse.Error -> Log.d(TAG, "Error[${response3.code}]\n${response3.body}")
+                is NetworkResponse.ErrorEmpty -> Log.d(TAG, "ErrorEmpty[${response3.code}]")
+                is NetworkResponse.NetworkFailure -> Log.d(TAG, "NetworkError")
+                is NetworkResponse.UnknownFailure -> Log.d(TAG, "UnknownError: ${response3.error}")
+            }
+
+            when (val response4 = service.getErrorEmpty()) {
+                is NetworkResponse.Success -> Log.d(TAG, "Success[${response4.code}]\n${response4.body}")
+                is NetworkResponse.SuccessEmpty -> Log.d(TAG, "SuccessEmpty[${response4.code}]")
+                is NetworkResponse.Error -> Log.d(TAG, "Error[${response4.code}]\n${response4.body}")
+                is NetworkResponse.ErrorEmpty -> Log.d(TAG, "ErrorEmpty[${response4.code}]")
+                is NetworkResponse.NetworkFailure -> Log.d(TAG, "NetworkError")
+                is NetworkResponse.UnknownFailure -> Log.d(TAG, "UnknownError: ${response4.error}")
             }
 
         }
@@ -49,8 +69,14 @@ class MainActivity : AppCompatActivity() {
         @GET("success")
         suspend fun getSuccess(): NetworkResponse<Success, Error>
 
+        @GET("success")
+        suspend fun getSuccessEmpty(): NetworkResponse<Void, Error>
+
         @GET("error")
         suspend fun getError(): NetworkResponse<Success, Error>
+
+        @GET("error")
+        suspend fun getErrorEmpty(): NetworkResponse<Success, Void>
     }
 
     private fun createRetrofit(moshi: Moshi, client: OkHttpClient): Retrofit {
